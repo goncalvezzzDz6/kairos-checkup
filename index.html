@@ -127,6 +127,9 @@
   .exame.bloq .acao { background: rgba(255,255,255,.06); color: var(--ink-soft); }
   .prev-grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 46vh; overflow-y: auto; }
   .prev-grade img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }
+  .btn-lixo { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; background: none; border: 0; color: rgba(243,235,221,.6); font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 10px; }
+  .btn-lixo.armado { color: #fff; background: var(--wine); }
+  .lixo-nota { font-size: 12px !important; opacity: .55 !important; margin: 6px 0 0 !important; }
   .album-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .lamina { padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); text-align: left; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow); }
   .lamina .foto { display: block; position: relative; border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 5; background: #000; outline: 1px solid rgba(214,178,106,.35); outline-offset: -4px; }
@@ -511,6 +514,13 @@
           return new Promise(function (res) { try { var r = tx('readwrite', 'album').put(it); r.onsuccess = res; r.onerror = res; } catch (e) { res(); } });
         });
       },
+      removerDoAlbum: function (id) {
+        delete memAlbum[id];
+        return pronto.then(function () {
+          if (!db) return;
+          return new Promise(function (res) { try { var r = tx('readwrite', 'album').delete(id); r.onsuccess = res; r.onerror = res; } catch (e) { res(); } });
+        });
+      },
       album: function () {
         return pronto.then(function () {
           var doMem = Object.keys(memAlbum).map(function (k) { return memAlbum[k]; });
@@ -643,6 +653,14 @@
         });
         gravarJSON('kairos_feitos', feitos); renderExames();
         if (qtdFeitos() > antes && antes === 0) toast('Encontramos seu progresso anterior.');
+        // Planilha zerada (ex.: depois de um teste): limpa o álbum também, menos fotos ainda na fila de envio
+        if (!Object.keys(feitos).length) {
+          Promise.all([Fila.album(), Fila.todos()]).then(function (r) {
+            var naFilaIds = {}; r[1].forEach(function (i) { naFilaIds[i.uploadId] = 1; });
+            return Promise.all(r[0].filter(function (a) { return a.participanteId === idPedido && !naFilaIds[a.id]; })
+              .map(function (a) { return Fila.removerDoAlbum(a.id); }));
+          }).then(function () { if (!$('tela-album').classList.contains('hidden')) renderAlbum(); });
+        }
       }).catch(function () {});
     }
   }
@@ -1040,9 +1058,20 @@
     var ex = EXAMES.filter(function (e) { return e.id === it.exameId; })[0] || { codigo: '', titulo: '' };
     var bg = document.createElement('div'); bg.className = 'alta-bg';
     bg.innerHTML = '<div class="alta-box"><div class="eyebrow" style="margin-bottom:10px">' + esc(ex.codigo) + ' · ' + esc(ex.titulo) + '</div><img alt=""><p>Pressione e segure a foto para salvar no celular.</p>' +
-      '<button class="btn ghost" data-a="fechar">Voltar ao álbum</button></div>';
+      '<button class="btn ghost" data-a="fechar">Voltar ao álbum</button>' +
+      '<button class="btn-lixo" data-a="apagar"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span>Remover do álbum</span></button>' +
+      '<p class="lixo-nota">Remove só deste celular. A foto continua salva no Drive.</p></div>';
     bg.querySelector('img').src = it.img;
-    bg.addEventListener('click', function (ev) { if (ev.target.getAttribute('data-a') === 'fechar' || ev.target === bg) bg.remove(); });
+    var armado = false;
+    bg.addEventListener('click', function (ev) {
+      var alvo = ev.target.closest ? ev.target.closest('[data-a]') : ev.target;
+      var a = alvo && alvo.getAttribute('data-a');
+      if (a === 'fechar' || ev.target === bg) { bg.remove(); return; }
+      if (a === 'apagar') {
+        if (!armado) { armado = true; alvo.classList.add('armado'); alvo.querySelector('span').textContent = 'Toque de novo para confirmar'; return; }
+        Fila.removerDoAlbum(it.id).then(function () { bg.remove(); renderAlbum(); toast('Foto removida do álbum.'); });
+      }
+    });
     document.body.appendChild(bg);
   }
 
