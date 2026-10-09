@@ -121,6 +121,12 @@
   .exame.feito .status { color: var(--ok); }
   .exame.fila .status { color: var(--warn); }
   .exame.fila .ic { background: var(--warn-soft); color: var(--warn); }
+  .exame.bloq { opacity: .55; }
+  .exame.bloq .ic { background: rgba(255,255,255,.04); color: var(--ink-soft); }
+  .exame.bloq .status { color: var(--ink-soft); }
+  .exame.bloq .acao { background: rgba(255,255,255,.06); color: var(--ink-soft); }
+  .nota { font-size: 13px; color: var(--ink-soft); line-height: 1.45; margin: -2px 2px 12px; }
+  .nota b { color: var(--accent); }
   .exame .slots { display: flex; gap: 4px; margin-top: 6px; }
   .exame .slots i { width: 18px; height: 4px; border-radius: 2px; background: var(--line); }
   .exame .slots i.on { background: var(--ok); }
@@ -256,6 +262,12 @@
       <button class="btn gold" id="btn-ver-alta">Ver minha Alta Médica</button>
     </div>
 
+    <div id="bloco-bonus">
+      <div class="secao"><h2>Retornos</h2><small id="bonus-cont">bônus</small></div>
+      <p class="nota">Consultas de retorno liberadas a cada dia do evento. Não são obrigatórias para a Alta, mas valem <b>pontos extras</b> no Plantão.</p>
+      <div id="lista-bonus"></div>
+    </div>
+
     <p class="rodape">Suas fotos vão direto para o Drive da Virtuosa.<br><button id="btn-trocar">Não é você? Trocar participante</button></p>
   </section>
 
@@ -297,11 +309,21 @@
     { id: 'mary-adriano', codigo: 'EX-03', titulo: 'Junta médica',          descricao: 'Uma foto com a Mary e o Adriano juntos.',                  quantidade: 1 },
     { id: 'patrocinador', codigo: 'EX-04', titulo: 'Visita aos parceiros',  descricao: 'Uma foto com um patrocinador do evento.',                  quantidade: 1 },
     { id: 'viva',         codigo: 'EX-05', titulo: 'Viva Virtuosa',         descricao: 'Uma foto no espaço Viva Virtuosa.',                        quantidade: 1 },
-    { id: 'instagramavel',codigo: 'EX-06', titulo: 'Momento instagramável', descricao: 'Uma foto no lugar mais instagramável que você encontrar.', quantidade: 1 }
+    { id: 'instagramavel',codigo: 'EX-06', titulo: 'Momento instagramável', descricao: 'Uma foto no lugar mais instagramável que você encontrar.', quantidade: 1 },
+    // Retornos (bônus) — manter igual ao Code.gs
+    { id: 'equipe',       codigo: 'RT-01', titulo: 'Equipe completa',   descricao: 'Uma foto com a sua equipe da unidade reunida.',              quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' },
+    { id: 'conexao',      codigo: 'RT-02', titulo: 'Nova conexão',      descricao: 'Uma foto com um franqueado de outra unidade.',               quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' },
+    { id: 'anotacoes',    codigo: 'RT-03', titulo: 'Prescrição da virada', descricao: 'Uma foto da sua principal anotação no bloco KAIRÓS.',      quantidade: 1, bonus: true, liberaEm: '2026-10-12T00:00:00-03:00' },
+    { id: 'despedida',    codigo: 'RT-04', titulo: 'Até a próxima',     descricao: 'Uma foto de despedida com a equipe no último dia.',          quantidade: 1, bonus: true, liberaEm: '2026-10-12T00:00:00-03:00' }
   ];
   var CONFIG = (window.CONFIG_SERVIDOR && window.CONFIG_SERVIDOR.exames) ? window.CONFIG_SERVIDOR : { exames: EXAMES_PADRAO };
   var EXAMES = CONFIG.exames;
-  var TOTAL = EXAMES.reduce(function (s, e) { return s + (e.quantidade || 1); }, 0);
+  var PRINCIPAIS = EXAMES.filter(function (e) { return !e.bonus; });
+  var RETORNOS = EXAMES.filter(function (e) { return e.bonus; });
+  var TOTAL = PRINCIPAIS.reduce(function (s, e) { return s + (e.quantidade || 1); }, 0);
+  function ehBonus(id) { return RETORNOS.some(function (e) { return e.id === id; }); }
+  function liberado(ex) { return !ex.liberaEm || Date.now() >= Date.parse(ex.liberaEm); }
+  function dataLiberacao(ex) { var d = new Date(Date.parse(ex.liberaEm)); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }); }
 
   var ICONES = {
     entrada: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
@@ -309,8 +331,13 @@
     'mary-adriano': '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="3"/><path d="M2.5 21a6.5 6.5 0 0 1 13 0M15 15.5a5.5 5.5 0 0 1 7 5.5"/>',
     patrocinador: '<path d="M12 2l2.9 6.3 6.6.6-5 4.5 1.5 6.6L12 16.6 6 20l1.5-6.6-5-4.5 6.6-.6z"/>',
     viva: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/>',
-    instagramavel: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor"/>'
+    instagramavel: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor"/>',
+    equipe: '<circle cx="12" cy="7" r="3"/><circle cx="5" cy="9" r="2.4"/><circle cx="19" cy="9" r="2.4"/><path d="M7 20a5 5 0 0 1 10 0M1.5 18a4 4 0 0 1 6-3.4M22.5 18a4 4 0 0 0-6-3.4"/>',
+    conexao: '<path d="M8 12l3 3 5-5"/><path d="M2 12l4-4 3 1 3-2 3 2 3-1 4 4-4 4h-3l-3 3-3-3H6z"/>',
+    anotacoes: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
+    despedida: '<path d="M7 11V5a1.5 1.5 0 0 1 3 0v5M10 10V3.5a1.5 1.5 0 0 1 3 0V10M13 10V4.5a1.5 1.5 0 0 1 3 0V11M16 11V7.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-2.7L3.3 14a1.5 1.5 0 0 1 2.4-1.8L7 14"/>'
   };
+  var SVG_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
   var ICONE_PADRAO = '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>';
   var SVG_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + ICONE_PADRAO + '</svg>';
   var SVG_OK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
@@ -496,7 +523,10 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
   function qtdFeitos() {
-    var n = 0; Object.keys(feitos).forEach(function (k) { n += Object.keys(feitos[k]).length; }); return n;
+    var n = 0; PRINCIPAIS.forEach(function (e) { n += Object.keys(feitos[e.id] || {}).length; }); return n;
+  }
+  function qtdRetornos() {
+    var n = 0; RETORNOS.forEach(function (e) { n += Object.keys(feitos[e.id] || {}).length; }); return n;
   }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
@@ -567,33 +597,40 @@
   }
 
   // ---------- Lista de exames + sinais vitais
-  function renderExames() {
-    var html = EXAMES.map(function (ex) {
+  function cardExame(ex) {
       var q = ex.quantidade || 1, f = feitos[ex.id] || {}, fl = naFila[ex.id] || {};
       var nFeitos = Object.keys(f).length, nFila = Object.keys(fl).length;
-      var completo = nFeitos >= q, temFila = nFila > 0;
-      var classe = completo ? 'feito' : (temFila ? 'fila' : '');
+      var completo = nFeitos >= q, temFila = nFila > 0, bloqueado = !liberado(ex);
+      var classe = bloqueado ? 'bloq' : (completo ? 'feito' : (temFila ? 'fila' : ''));
       var status;
-      if (completo) status = SVG_OK + ' Laudo aprovado';
+      if (bloqueado) status = 'Libera em ' + dataLiberacao(ex);
+      else if (completo) status = SVG_OK + (ex.bonus ? ' Retorno registrado' : ' Laudo aprovado');
       else if (temFila) status = (enviandoAgora && enviandoAgora.exameId === ex.id ? '<span class="spinner"></span> Enviando…' : '<span class="spinner"></span> Na fila de envio');
-      else status = q > 1 ? (nFeitos + ' de ' + q + ' fotos') : 'Pendente';
+      else status = q > 1 ? (nFeitos + ' de ' + q + ' fotos') : (ex.bonus ? 'Disponível · +1 ponto' : 'Pendente');
       var slots = '';
       if (q > 1) {
         slots = '<div class="slots">';
         for (var i = 1; i <= q; i++) slots += '<i class="' + (f[i] ? 'on' : (fl[i] ? 'q' : '')) + '"></i>';
         slots += '</div>';
       }
-      var rotulo = completo ? 'Refazer' : (q > 1 && nFeitos + nFila > 0 ? 'Próxima' : 'Fotografar');
-      var desabilitado = !completo && (nFeitos + nFila >= q);
+      var rotulo = bloqueado ? 'Bloqueado' : completo ? 'Refazer' : (q > 1 && nFeitos + nFila > 0 ? 'Próxima' : 'Fotografar');
+      var desabilitado = bloqueado || (!completo && (nFeitos + nFila >= q));
       return '<div class="card exame ' + classe + '">' +
         '<div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONES[ex.id] || ICONE_PADRAO) + '</svg></div>' +
         '<div><div class="cod">' + esc(ex.codigo || '') + '</div><div class="tit">' + esc(ex.titulo) + '</div><div class="desc">' + esc(ex.descricao || '') + '</div>' +
         '<div class="status">' + status + '</div>' + slots + '</div>' +
-        '<button class="acao' + (completo ? '' : ' icone') + '" aria-label="' + rotulo + '" data-exame="' + esc(ex.id) + '"' + (desabilitado ? ' disabled style="opacity:.35"' : '') + '>' + (completo ? rotulo : SVG_CAM) + '</button>' +
+        '<button class="acao' + (completo && !bloqueado ? '' : ' icone') + '" aria-label="' + rotulo + '" data-exame="' + esc(ex.id) + '"' + (desabilitado ? ' disabled style="opacity:.35"' : '') + '>' + (bloqueado ? SVG_LOCK : completo ? rotulo : SVG_CAM) + '</button>' +
         '</div>';
-    }).join('');
+  }
+
+  function renderExames() {
+    var html = PRINCIPAIS.map(cardExame).join('');
+    $('lista-bonus').innerHTML = RETORNOS.map(cardExame).join('');
+    $('bloco-bonus').classList.toggle('hidden', !RETORNOS.length);
+    var nr = qtdRetornos();
+    $('bonus-cont').textContent = nr + '/' + RETORNOS.length + ' · +1 ponto cada';
     $('lista-exames').innerHTML = html;
-    Array.prototype.forEach.call(document.querySelectorAll('#lista-exames .acao'), function (b) {
+    Array.prototype.forEach.call(document.querySelectorAll('#lista-exames .acao, #lista-bonus .acao'), function (b) {
       b.addEventListener('click', function () { escolherFoto(b.dataset.exame); });
     });
     var n = qtdFeitos();
@@ -631,6 +668,8 @@
   var exameEscolhido = null;
 
   function escolherFoto(exameId) {
+    var ex = EXAMES.filter(function (e) { return e.id === exameId; })[0];
+    if (ex && !liberado(ex)) { toast('Este retorno libera em ' + dataLiberacao(ex) + '.'); return; }
     exameEscolhido = exameId;
     var inp = $('in-foto'); inp.value = ''; inp.click();
   }
@@ -723,10 +762,11 @@
       }).then(function (r) {
         return Fila.tirar(item.uploadId).then(function () {
           if (perfil && item.participanteId === perfil.id) {
+            var antesAlta = qtdFeitos();
             (feitos[r.exameId] = feitos[r.exameId] || {})[r.indice] = true;
             gravarJSON('kairos_feitos', feitos);
             carimbo();
-            if (qtdFeitos() >= TOTAL) setTimeout(abrirAlta, 1100);
+            if (!ehBonus(r.exameId) && antesAlta < TOTAL && qtdFeitos() >= TOTAL) setTimeout(abrirAlta, 1100);
           }
           processando = false; enviandoAgora = null;
           processarFila();
@@ -909,7 +949,7 @@
         var pct = Math.round(100 * p.feitos / r.totalFotosExigidas);
         return '<div class="rank-item' + (i < 3 ? ' top' : '') + '"><div class="pos">' + String(i + 1).padStart(2, '0') + '</div>' +
           '<div style="min-width:0"><div class="n">' + esc(p.nome) + '</div><div class="u">' + esc(p.unidade) + '</div><div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
-          (p.alta ? '<span class="badge-alta">ALTA</span>' : '<span class="qt">' + p.feitos + '/' + r.totalFotosExigidas + '</span>') + '</div>';
+          (p.alta ? '<span class="badge-alta">ALTA' + (p.bonus ? ' +' + p.bonus : '') + '</span>' : '<span class="qt">' + p.feitos + '/' + r.totalFotosExigidas + (p.bonus ? ' +' + p.bonus : '') + '</span>') + '</div>';
       }).join('') : '<div class="vazio">Ninguém fez exames ainda. Seja o primeiro!</div>';
       $('r-unidades').innerHTML = r.unidades.length ? r.unidades.map(function (u, i) {
         return '<div class="rank-item' + (i < 3 ? ' top' : '') + '"><div class="pos">' + String(i + 1).padStart(2, '0') + '</div>' +
@@ -931,6 +971,7 @@
   /* =====================================================================
    *  INÍCIO
    * ===================================================================== */
+  setInterval(function () { if (perfil && !$('tela-prontuario').classList.contains('hidden')) renderExames(); }, 60000);
   if (perfil && perfil.id) abrirProntuario(true);
   else mostrar('triagem');
   processarFila(); // retoma fotos que ficaram pendentes de uma visita anterior
