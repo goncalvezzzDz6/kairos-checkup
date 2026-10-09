@@ -549,15 +549,19 @@
     renderExames();
     mostrar('prontuario');
     if (buscarServidor) {
+      // A planilha é a fonte da verdade: o que está lá é o que vale.
+      // (Se as linhas forem apagadas, o celular também zera. Sem internet, mantém o que já tinha.)
+      var idPedido = perfil.id;
       API.meuProgresso(perfil.id).then(function (srv) {
-        var mudou = false;
+        if (!perfil || perfil.id !== idPedido) return;
+        var antes = qtdFeitos();
+        feitos = {};
         Object.keys(srv || {}).forEach(function (ex) {
-          Object.keys(srv[ex]).forEach(function (i) {
-            feitos[ex] = feitos[ex] || {};
-            if (!feitos[ex][i]) { feitos[ex][i] = true; mudou = true; }
-          });
+          feitos[ex] = {};
+          Object.keys(srv[ex]).forEach(function (i) { feitos[ex][i] = true; });
         });
-        if (mudou) { gravarJSON('kairos_feitos', feitos); renderExames(); toast('Encontramos seu progresso anterior.'); }
+        gravarJSON('kairos_feitos', feitos); renderExames();
+        if (qtdFeitos() > antes && antes === 0) toast('Encontramos seu progresso anterior.');
       }).catch(function () {});
     }
   }
