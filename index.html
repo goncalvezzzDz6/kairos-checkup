@@ -264,7 +264,7 @@
 
     <div id="bloco-bonus">
       <div class="secao"><h2>Retornos</h2><small id="bonus-cont">bônus</small></div>
-      <p class="nota">Consultas de retorno liberadas a cada dia do evento. Não são obrigatórias para a Alta, mas valem <b>pontos extras</b> no Plantão.</p>
+      <p class="nota">O primeiro retorno libera com a sua Alta; os demais, no domingo. Não são obrigatórias para a Alta, mas valem <b>pontos extras</b> no Plantão.</p>
       <div id="lista-bonus"></div>
     </div>
 
@@ -311,10 +311,10 @@
     { id: 'viva',         codigo: 'EX-05', titulo: 'Viva Virtuosa',         descricao: 'Uma foto no espaço Viva Virtuosa.',                        quantidade: 1 },
     { id: 'instagramavel',codigo: 'EX-06', titulo: 'Momento instagramável', descricao: 'Uma foto no lugar mais instagramável que você encontrar.', quantidade: 1 },
     // Retornos (bônus) — manter igual ao Code.gs
-    { id: 'equipe',       codigo: 'RT-01', titulo: 'Equipe completa',   descricao: 'Uma foto com a sua equipe da unidade reunida.',              quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' },
+    { id: 'equipe',       codigo: 'RT-01', titulo: 'Equipe completa',   descricao: 'Uma foto com a sua equipe da unidade reunida.',              quantidade: 1, bonus: true, liberaAposAlta: true },
     { id: 'conexao',      codigo: 'RT-02', titulo: 'Nova conexão',      descricao: 'Uma foto com um franqueado de outra unidade.',               quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' },
-    { id: 'anotacoes',    codigo: 'RT-03', titulo: 'Prescrição da virada', descricao: 'Uma foto da sua principal anotação no bloco KAIRÓS.',      quantidade: 1, bonus: true, liberaEm: '2026-10-12T00:00:00-03:00' },
-    { id: 'despedida',    codigo: 'RT-04', titulo: 'Até a próxima',     descricao: 'Uma foto de despedida com a equipe no último dia.',          quantidade: 1, bonus: true, liberaEm: '2026-10-12T00:00:00-03:00' }
+    { id: 'anotacoes',    codigo: 'RT-03', titulo: 'Prescrição da virada', descricao: 'Uma foto da sua principal anotação no bloco KAIRÓS.',      quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' },
+    { id: 'despedida',    codigo: 'RT-04', titulo: 'Até a próxima',     descricao: 'Uma foto de despedida com a sua equipe no domingo.',         quantidade: 1, bonus: true, liberaEm: '2026-10-11T00:00:00-03:00' }
   ];
   var CONFIG = (window.CONFIG_SERVIDOR && window.CONFIG_SERVIDOR.exames) ? window.CONFIG_SERVIDOR : { exames: EXAMES_PADRAO };
   var EXAMES = CONFIG.exames;
@@ -322,7 +322,15 @@
   var RETORNOS = EXAMES.filter(function (e) { return e.bonus; });
   var TOTAL = PRINCIPAIS.reduce(function (s, e) { return s + (e.quantidade || 1); }, 0);
   function ehBonus(id) { return RETORNOS.some(function (e) { return e.id === id; }); }
-  function liberado(ex) { return !ex.liberaEm || Date.now() >= Date.parse(ex.liberaEm); }
+  function liberado(ex) {
+    if (ex.liberaEm && Date.now() < Date.parse(ex.liberaEm)) return false;
+    if (ex.liberaAposAlta && qtdFeitos() < TOTAL) return false;
+    return true;
+  }
+  function textoLiberacao(ex) {
+    if (ex.liberaEm && Date.now() < Date.parse(ex.liberaEm)) return 'Libera em ' + dataLiberacao(ex);
+    return 'Libera após a Alta';
+  }
   function dataLiberacao(ex) { var d = new Date(Date.parse(ex.liberaEm)); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }); }
 
   var ICONES = {
@@ -603,7 +611,7 @@
       var completo = nFeitos >= q, temFila = nFila > 0, bloqueado = !liberado(ex);
       var classe = bloqueado ? 'bloq' : (completo ? 'feito' : (temFila ? 'fila' : ''));
       var status;
-      if (bloqueado) status = 'Libera em ' + dataLiberacao(ex);
+      if (bloqueado) status = textoLiberacao(ex);
       else if (completo) status = SVG_OK + (ex.bonus ? ' Retorno registrado' : ' Laudo aprovado');
       else if (temFila) status = (enviandoAgora && enviandoAgora.exameId === ex.id ? '<span class="spinner"></span> Enviando…' : '<span class="spinner"></span> Na fila de envio');
       else status = q > 1 ? (nFeitos + ' de ' + q + ' fotos') : (ex.bonus ? 'Disponível · +1 ponto' : 'Pendente');
@@ -669,7 +677,7 @@
 
   function escolherFoto(exameId) {
     var ex = EXAMES.filter(function (e) { return e.id === exameId; })[0];
-    if (ex && !liberado(ex)) { toast('Este retorno libera em ' + dataLiberacao(ex) + '.'); return; }
+    if (ex && !liberado(ex)) { toast(textoLiberacao(ex) + '.'); return; }
     exameEscolhido = exameId;
     var inp = $('in-foto'); inp.value = ''; inp.click();
   }
